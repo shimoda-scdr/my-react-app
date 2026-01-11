@@ -1,23 +1,23 @@
-import { ColoredMessage } from "./components/ColoredMessage";
-import { useState } from "react";
-import { CssModules } from "./components/CssModules";
+// src/App.jsx
+import React from 'react';
+import { BrowserRouter, Routes, Route } from 'react-router-dom';
 
+// 作成した2つのページを読み込む
+import Home from './Home';
+import EditBook from './EditBook';
 
-export const App = () => {
-  console.log("Appがレンダーされたよ!");
-
-  const [num, setNum] = useState(0);
-  const onClickButton = () => {
-    setNum(num + 1);
-  }
-
+function App() {
   return (
-    <>
-      <h1 style={{color: "red"}}>Hello React!</h1>
-      <ColoredMessage color="blue">お元気ですか？</ColoredMessage>
-      <ColoredMessage color="pink">元気です！</ColoredMessage>
-      <button onClick={onClickButton}> ボタン </button>
-      <p>{num}</p>
-    </>
+    <BrowserRouter>
+      <Routes>
+        {/* URLが "/" の時は Home を表示 */}
+        <Route path="/" element={<Home />} />
+        
+        {/* URLが "/edit/123" などの時は EditBook を表示 */}
+        <Route path="/edit/:id" element={<EditBook />} />
+      </Routes>
+    </BrowserRouter>
   );
-};
+}
+
+export default App;
