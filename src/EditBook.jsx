@@ -1,15 +1,21 @@
 // src/EditBook.jsx
 import React, { useState, useEffect } from 'react';
 import { supabase } from './supabaseClient';
-import { useParams, useNavigate } from 'react-router-dom'; // URLのパラメータ取得用
-import { Box, Button, Container, FormControl, FormLabel, Input, Heading, VStack, useToast, Image } from '@chakra-ui/react';
+import { useParams, useNavigate ,useLocation} from 'react-router-dom'; // URLのパラメータ取得用
+import { 
+    Box, Button, Container, FormControl, FormLabel, Input, Heading, VStack, useToast, Image, Textarea
+} from '@chakra-ui/react';
 
 
 export default function EditBook() {
   const { id } = useParams(); // URLの :id の部分を取得
   const navigate = useNavigate(); // ページ移動用
+  const location = useLocation();
   const toast = useToast();
   
+  const initialBook = location.state?.book;
+  const [score, setScore] = useState(initialBook?.score || '');
+  const [review, setReview] = useState(initialBook?.review || '');
   const [loading, setLoading] = useState(false);
   const [title, setTitle] = useState('');
   const [currentImage, setCurrentImage] = useState(''); // 今の画像URL
@@ -28,6 +34,8 @@ export default function EditBook() {
         toast({ title: 'エラー', description: 'データの取得に失敗しました', status: 'error' });
       } else {
         setTitle(data.title);
+        setReview(data.review || '');
+        setScore(data.score || '');
         setCurrentImage(data.cover_url);
       }
     };
@@ -55,7 +63,11 @@ export default function EditBook() {
       // データベースを更新 (Update)
       const { error: updateError } = await supabase
         .from('books')
-        .update({ title: title, cover_url: imageUrl }) // 更新する内容
+        .update({ 
+            title: title,
+            review: review,
+            score: score,
+            cover_url: imageUrl }) // 更新する内容
         .eq('id', id); // どのデータを更新するか
 
       if (updateError) throw updateError;
@@ -98,6 +110,27 @@ export default function EditBook() {
             <FormControl>
               <FormLabel>タイトル修正</FormLabel>
               <Input value={title} onChange={(e) => setTitle(e.target.value)} />
+            </FormControl>
+
+            {/*点数編集*/}
+            <FormControl>
+              <FormLabel>点数</FormLabel>
+              <Input 
+                type="number" 
+                value={score} 
+                onChange={(e) => setScore(e.target.value)} 
+                max={100}
+              />
+            </FormControl>
+            
+            /* ★感想編集エリア */
+            <FormControl>
+              <FormLabel>感想</FormLabel>
+              <Textarea 
+                value={review} 
+                onChange={(e) => setReview(e.target.value)} 
+                rows={6}
+              />
             </FormControl>
 
             <FormControl>
