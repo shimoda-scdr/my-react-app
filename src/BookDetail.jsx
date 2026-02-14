@@ -1,15 +1,16 @@
 // src/BookDetail.jsx
 import React, { useState, useEffect } from 'react';
 import { supabase } from './supabaseClient';
-import { useParams, Link } from 'react-router-dom';
+import { useParams, Link, useLocation, useNavigate } from 'react-router-dom';
 import { 
-  Box, Button, Container, FormControl, FormLabel, Input, Heading, VStack, useToast, Image, Text, Textarea, HStack, Card, CardBody, Divider 
+  Box, Button, Container, FormControl, FormLabel, Input, Heading, VStack, useToast, Image, Text, Textarea, HStack, Card, CardBody, Divider,
+  Tag, Wrap, WrapItem // ★この3つを追加
 } from '@chakra-ui/react';
 
 export default function BookDetail() {
   const { id } = useParams();
   const toast = useToast();
-
+  const navigate = useNavigate();
   const [book, setBook] = useState(null);
   const [reviews, setReviews] = useState([]);
   const [currentUser, setCurrentUser] = useState(null);
@@ -126,6 +127,27 @@ export default function BookDetail() {
 
         <Box textAlign="center">
           <Heading as="h1" size="xl" mb={4}>{book.title}</Heading>
+
+{/* ▼▼▼ この部分を書き換えます ▼▼▼ */}
+          {book.tags && book.tags.length > 0 && (
+            <Wrap justify="center" mb={4} spacing={2}>
+              {book.tags.map((tag, index) => (
+                <WrapItem key={index}>
+                  <Tag 
+                    size="md" 
+                    colorScheme="teal" 
+                    borderRadius="full"
+                    cursor="pointer" // ★追加：クリックできる指のマークにする
+                    _hover={{ opacity: 0.7 }} // ★追加：ホバー時に少し透明にする
+                    onClick={() => navigate('/', { state: { searchTag: tag } })} // ★追加：ホーム画面に tag を持たせて移動する
+                  >
+                    {tag}
+                  </Tag>
+                </WrapItem>
+              ))}
+            </Wrap>
+          )}
+          {/* ▲▲▲ ここまで ▲▲▲ */}
           <Image src={book.cover_url} alt={book.title} maxH="300px" loading='lazy' mx="auto" borderRadius="md" boxShadow="md" />
         </Box>
         <Divider />
