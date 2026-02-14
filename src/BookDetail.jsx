@@ -126,7 +126,7 @@ export default function BookDetail() {
 
         <Box textAlign="center">
           <Heading as="h1" size="xl" mb={4}>{book.title}</Heading>
-          <Image src={book.cover_url} alt={book.title} maxH="300px" mx="auto" borderRadius="md" boxShadow="md" />
+          <Image src={book.cover_url} alt={book.title} maxH="300px" loading='lazy' mx="auto" borderRadius="md" boxShadow="md" />
         </Box>
         <Divider />
 
@@ -158,7 +158,7 @@ export default function BookDetail() {
                   <CardBody>
                     <HStack justify="space-between" mb={2}>
                       <HStack>
-                        <Link to={`/profile/${rev.user_id}`}>
+                        <Link to={`/profile/${rev.user_id}`} state={{ username: rev.profiles?.username }}> {/* ★プロフィールページへのリンク */}
                           <Text fontWeight="bold" color="blue.600" _hover={{ textDecoration: 'underline' }}>
                             {rev.profiles?.username} さん
                           </Text>

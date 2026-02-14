@@ -3,29 +3,37 @@ import React, { useState, useEffect } from 'react';
 import { supabase } from './supabaseClient';
 import { Link } from 'react-router-dom';
 import {
-  Box, Button, Container, FormControl, FormLabel, Input, Heading, VStack, useToast, SimpleGrid, Image, Text, Card, CardBody, HStack, Spacer, Collapse, Select
+  Box, Button, Container, FormControl, FormLabel, Input, Heading, VStack, useToast, SimpleGrid, Image, Text, Card, CardBody, HStack, Spacer, Collapse, Select,
+  Spinner, Center // ★追加：ローディング表示用の部品
 } from '@chakra-ui/react';
+import imageCompression from 'browser-image-compression';
 
 export default function Home() {
   const [loading, setLoading] = useState(false);
+  
+  // ★追加：データ取得中かどうかを判定するState（最初はtrueにしておく）
+  const [isFetching, setIsFetching] = useState(true);
+
   const [title, setTitle] = useState('');
   const [file, setFile] = useState(null);
   const [books, setBooks] = useState([]);
   const [keyword, setKeyword] = useState('');
-
-  const [username, setUsername] = useState('');
-  const [userId, setUserId] = useState(null);
-  const [currentUserRole, setCurrentUserRole] = useState('user'); // ★追加：ユーザーの権限を保存するState
+  const [tags, setTags] = useState([]);
+  
+  const [username, setUsername] = useState(localStorage.getItem('my_username') || '');
+  const [userId, setUserId] = useState(localStorage.getItem('my_userId') || null);
+  const [currentUserRole, setCurrentUserRole] = useState(localStorage.getItem('my_role') || 'user'); 
   
   const [isFormOpen, setIsFormOpen] = useState(false);
   const toast = useToast();
 
-  const [sortOrder, setSortOrder] = useState('newest'); // ★追加：並び順を選ぶためのState
-  // ★追加：ページネーション用のStateと設定
   const [currentPage, setCurrentPage] = useState(1);
-  const ITEMS_PER_PAGE = 10; // 1ページに表示する件数
+  const ITEMS_PER_PAGE = 10; 
+  const [sortOrder, setSortOrder] = useState('newest');
 
   const fetchBooks = async (searchWord = '') => {
+    setIsFetching(true); // ★追加：通信を始める前に「ローディング中」にする
+
     let query = supabase
       .from('books')
       .select('*, reviews(score)') 
@@ -38,8 +46,10 @@ export default function Home() {
     const { data, error } = await query;
     if (!error) { 
       setBooks(data); 
-      setCurrentPage(1); // ★検索したりデータを取り直した時は、必ず1ページ目に戻す
+      setCurrentPage(1); 
     }
+    
+    setIsFetching(false); // ★追加：データが届いたら「ローディング終了」にする
   };
 
   useEffect(() => {
@@ -48,22 +58,34 @@ export default function Home() {
     const fetchUserProfile = async () => {
       const { data: { user } } = await supabase.auth.getUser();
       if (user) {
+        setUserId(user.id);
+        localStorage.setItem('my_userId', user.id);
+        
         const { data } = await supabase
           .from('profiles')
-          .select('username')
+          .select('username, role') 
           .eq('id', user.id)
           .single();
+          
         if (data) {
-          if(data.username) setUsername(data.username);
-          if(data.role) setCurrentUserRole(data.role); // ★追加：ユーザーの権限もStateに保存する
+          if (data.username) {
+            setUsername(data.username);
+            localStorage.setItem('my_username', data.username);
+          }
+          if (data.role) {
+            setCurrentUserRole(data.role);
+            localStorage.setItem('my_role', data.role);
+          }
         }
-        setUserId(user.id);
       }
     };
     fetchUserProfile();
   }, []);
 
   const handleLogout = async () => {
+    localStorage.removeItem('my_username');
+    localStorage.removeItem('my_userId');
+    localStorage.removeItem('my_role');
     await supabase.auth.signOut();
   };
 
@@ -75,10 +97,18 @@ export default function Home() {
     }
     try {
         setLoading(true);
-        const fileExt = file.name.split('.').pop();
+
+        const options = {
+          maxSizeMB: 0.5, 
+          maxWidthOrHeight: 1024,
+          useWebWorker: true
+        };
+        const compressedFile = await imageCompression(file, options);
+
+        const fileExt = compressedFile.name.split('.').pop();
         const fileName = `${Date.now()}.${fileExt}`;
         
-        const { error: uploadError } = await supabase.storage.from('covers').upload(fileName, file);
+        const { error: uploadError } = await supabase.storage.from('covers').upload(fileName, compressedFile);
         if (uploadError) throw uploadError;
         
         const { data: urlData } = supabase.storage.from('covers').getPublicUrl(fileName);
@@ -107,7 +137,7 @@ export default function Home() {
     return Math.round(total / reviews.length); 
   };
 
-  const sortedBooks = [...books].sort((a,b) => {
+  const sortedBooks = [...books].sort((a, b) => {
     if (sortOrder === 'newest') {
       return new Date(b.created_at) - new Date(a.created_at);
     } else if (sortOrder === 'reviews') {
@@ -118,12 +148,7 @@ export default function Home() {
     return 0;
   });
 
-  // ==========================================
-  // ★追加：表示するデータを計算する
-  // ==========================================
-  const totalPages = Math.ceil(books.length / ITEMS_PER_PAGE); // 全体のページ数を計算
-  
-  // 表示する最初の位置と最後の位置を計算して切り取る (slice)
+  const totalPages = Math.ceil(sortedBooks.length / ITEMS_PER_PAGE); 
   const startIndex = (currentPage - 1) * ITEMS_PER_PAGE;
   const currentBooks = sortedBooks.slice(startIndex, startIndex + ITEMS_PER_PAGE);
 
@@ -134,8 +159,9 @@ export default function Home() {
         <HStack>
             <Heading as="h1" size="lg">同人誌レビュー</Heading>
             <Spacer />
-              {username && (
-              <Link to={`/profile/${userId}`}>
+            
+            {username && (
+              <Link to={`/profile/${userId}`} state={{ username }}>
                 <Text 
                   fontWeight="bold" 
                   mr={4} 
@@ -143,45 +169,51 @@ export default function Home() {
                   _hover={{ textDecoration: 'underline' }}
                 >
                   {username}さん
-                  {/* おまけ：管理者の場合はアイコンや文字を添えてもわかりやすいです */}
                   {currentUserRole === 'admin' && " (管理者)"}
                 </Text>
               </Link>
             )}
-            <Button colorScheme="red" variant="outline" size="sm" onClick={handleLogout}>
+            
+            <Button colorScheme="gray" variant="outline" size="sm" onClick={handleLogout}>
                 ログアウト
             </Button>
         </HStack>
 
-        <Box>
-          <Button 
-            onClick={() => setIsFormOpen(!isFormOpen)} 
-            colorScheme="blue" 
-            variant="outline" 
-            width="full" 
-            mb={4}
-          >
-            {isFormOpen ? '登録フォームを閉じる ▲' : '新しい本を登録する ▼'}
-          </Button>
+        {currentUserRole === 'admin' && (
+          <Box>
+            <Button 
+              onClick={() => setIsFormOpen(!isFormOpen)} 
+              colorScheme="blue" 
+              variant="outline" 
+              width="full" 
+              mb={4}
+            >
+              {isFormOpen ? '登録フォームを閉じる ▲' : '新しい本を登録する ▼'}
+            </Button>
 
-          <Collapse in={isFormOpen} animateOpacity>
-            <Box as="form" onSubmit={handleRegister} p={6} borderWidth={1} borderRadius="lg" boxShadow="md" bg="white">
-               <VStack spacing={4}>
-                <FormControl isRequired>
-                  <FormLabel>本のタイトル</FormLabel>
-                  <Input value={title} onChange={(e) => setTitle(e.target.value)} placeholder="タイトルを入力" />
-                </FormControl>
-                <FormControl isRequired>
-                  <FormLabel>表紙画像</FormLabel>
-                  <Input type="file" accept="image/*" onChange={(e) => setFile(e.target.files[0])} p={1} />
-                </FormControl>
-                <Button type="submit" colorScheme="blue" width="full" isLoading={loading}>本を登録する</Button>
-              </VStack>
-            </Box>
-          </Collapse>
-        </Box>
+            <Collapse in={isFormOpen} animateOpacity>
+              <Box as="form" onSubmit={handleRegister} p={6} borderWidth={1} borderRadius="lg" boxShadow="md" bg="white">
+                 <VStack spacing={4}>
+                  <FormControl isRequired>
+                    <FormLabel>本のタイトル</FormLabel>
+                    <Input value={title} onChange={(e) => setTitle(e.target.value)} placeholder="タイトルを入力" />
+                  </FormControl>
+                  <FormControl isRequired>
+                    <FormLabel>表紙画像</FormLabel>
+                    <Input type="file" accept="image/*" onChange={(e) => setFile(e.target.files[0])} p={1} />
+                  </FormControl>
+                  <FormControl>
+                    <FormLabel>タグ（複数ある場合はスペースで区切る）</FormLabel>
+                    <Input value={tags} onChange={(e) => setTags(e.target.value)} placeholder="例: クイズ 短文基本" />
+                  </FormControl>
+                  <Button type="submit" colorScheme="blue" width="full" isLoading={loading}>本を登録する</Button>
+                </VStack>
+              </Box>
+            </Collapse>
+          </Box>
+        )}
 
-<HStack w="full">
+        <HStack w="full">
           <Input placeholder="タイトルで検索" value={keyword} onChange={(e) => setKeyword(e.target.value)} />
           <Button onClick={() => fetchBooks(keyword)}>検索</Button>
           
@@ -190,46 +222,55 @@ export default function Home() {
             value={sortOrder} 
             onChange={(e) => {
               setSortOrder(e.target.value);
-              setCurrentPage(1); // ソート順を変えたら1ページ目に戻す
+              setCurrentPage(1); 
             }}
           >
             <option value="newest">新着順</option>
-            <option value="reviews">レビュー数</option>
+            <option value="reviews">レビューが多い順</option>
           </Select>
         </HStack>
 
         <Box textAlign="left">
-          <Heading size="lg" mb={4}>登録済みリスト ({books.length}冊)</Heading>
-          <SimpleGrid columns={[2, 3]} spacing={5}>
-            {/* ★修正: 全てのbooksではなく、切り取った currentBooks を表示する */}
-            {currentBooks.map((book) => (
-              <Link key={book.id} to={`/book/${book.id}`} state={{ book }}>
-                <Card overflow="hidden" variant="outline" cursor="pointer" _hover={{ boxShadow: "lg" }}>
-                  <Image src={book.cover_url} alt={book.title} objectFit="cover" height="200px" width="100%" />
-                  <CardBody p={3}>
-                    <Text fontWeight="bold" noOfLines={1} mb={2}>{book.title}</Text>
-                    
-                    <HStack spacing={2} mb={1}>
-                      <Text fontSize="sm" color="gray.500">平均点:</Text>
-                      <Text fontWeight="bold" color="blue.500">
-                        {getAverageScore(book.reviews)} {book.reviews?.length > 0 && '点'}
+          {/* ★変更：ロード中は「(0冊)」を隠す */}
+          <Heading size="lg" mb={4}>
+            登録済みリスト {!isFetching && `(${books.length}冊)`}
+          </Heading>
+
+          {/* ★変更：isFetchingがtrueならローディングを、falseなら本の一覧を表示 */}
+          {isFetching ? (
+            <Center py={10}>
+              <Spinner size="xl" color="blue.500" thickness="4px" />
+            </Center>
+          ) : currentBooks.length === 0 ? (
+            <Text color="gray.500">登録されている本がありません。</Text>
+          ) : (
+            <SimpleGrid columns={[2, 3]} spacing={5}>
+              {currentBooks.map((book) => (
+                <Link key={book.id} to={`/book/${book.id}`} state={{ book }}>
+                  <Card overflow="hidden" variant="outline" cursor="pointer" _hover={{ boxShadow: "lg" }}>
+                    <Image src={book.cover_url} alt={book.title} loading="lazy" objectFit="cover" height="200px" width="100%" />
+                    <CardBody p={3}>
+                      <Text fontWeight="bold" noOfLines={1} mb={2}>{book.title}</Text>
+                      
+                      <HStack spacing={2} mb={1}>
+                        <Text fontSize="sm" color="gray.500">平均点:</Text>
+                        <Text fontWeight="bold" color="blue.500">
+                          {getAverageScore(book.reviews)} {book.reviews?.length > 0 && '点'}
+                        </Text>
+                      </HStack>
+                      <Text fontSize="sm" color="gray.600">
+                        レビュー数: {book.reviews ? book.reviews.length : 0}件
                       </Text>
-                    </HStack>
-                    <Text fontSize="sm" color="gray.600">
-                      レビュー数: {book.reviews ? book.reviews.length : 0}件
-                    </Text>
-                  </CardBody>
-                </Card>
-              </Link>
-            ))}
-          </SimpleGrid>
+                    </CardBody>
+                  </Card>
+                </Link>
+              ))}
+            </SimpleGrid>
+          )}
         </Box>
 
-
-        {/* ==========================================
-            ★変更：ページ切り替えボタン（数字ボタン付き）
-        ========================================== */}
-        {totalPages > 0 && (
+        {/* ページネーション（データがある時だけ表示） */}
+        {!isFetching && totalPages > 0 && (
           <HStack justify="center" pt={6} pb={8} spacing={2} wrap="wrap">
             <Button
               onClick={() => setCurrentPage((prev) => Math.max(1, prev - 1))}
@@ -239,16 +280,14 @@ export default function Home() {
               前へ
             </Button>
             
-            {/* ★ここが数字ボタンを自動生成する仕組みです */}
             {Array.from({ length: totalPages }, (_, i) => i + 1).map((number) => (
               <Button
                 key={number}
                 onClick={() => setCurrentPage(number)}
-                // 現在のページだけ色を青く（目立たせる）し、他はグレーのアウトラインにする
                 colorScheme={currentPage === number ? "blue" : "gray"}
                 variant={currentPage === number ? "solid" : "outline"}
                 size="sm"
-                w="10" // ボタンの幅を揃えて綺麗な四角にする
+                w="10" 
               >
                 {number}
               </Button>
