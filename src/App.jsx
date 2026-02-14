@@ -8,6 +8,7 @@ import Home from './Home';
 import EditBook from './EditBook';
 import Login from './Login'; // ★追加
 import BookDetail from './BookDetail';
+import Profile from './Profile'; // ★追加
 
 function App() {
   const [session, setSession] = useState(null);
@@ -40,6 +41,7 @@ function App() {
         <Route path="/" element={<Home />} />
         <Route path="/edit/:id" element={<EditBook />} />
         <Route path="/book/:id" element={<BookDetail />} />
+        <Route path="/profile/:id" element={<Profile />} /> {/* ★追加：プロフィールページへのルート */}
       </Routes>
     </BrowserRouter>
   );

@@ -3,7 +3,7 @@ import React, { useState, useEffect } from 'react';
 import { supabase } from './supabaseClient';
 import { Link } from 'react-router-dom';
 import {
-  Box, Button, Container, FormControl, FormLabel, Input, Heading, VStack, useToast, SimpleGrid, Image, Text, Card, CardBody, HStack, Spacer, Collapse
+  Box, Button, Container, FormControl, FormLabel, Input, Heading, VStack, useToast, SimpleGrid, Image, Text, Card, CardBody, HStack, Spacer, Collapse, Select
 } from '@chakra-ui/react';
 
 export default function Home() {
@@ -12,10 +12,15 @@ export default function Home() {
   const [file, setFile] = useState(null);
   const [books, setBooks] = useState([]);
   const [keyword, setKeyword] = useState('');
+
   const [username, setUsername] = useState('');
+  const [userId, setUserId] = useState(null);
+  const [currentUserRole, setCurrentUserRole] = useState('user'); // ★追加：ユーザーの権限を保存するState
+  
   const [isFormOpen, setIsFormOpen] = useState(false);
   const toast = useToast();
 
+  const [sortOrder, setSortOrder] = useState('newest'); // ★追加：並び順を選ぶためのState
   // ★追加：ページネーション用のStateと設定
   const [currentPage, setCurrentPage] = useState(1);
   const ITEMS_PER_PAGE = 10; // 1ページに表示する件数
@@ -48,9 +53,11 @@ export default function Home() {
           .select('username')
           .eq('id', user.id)
           .single();
-        if (data && data.username) {
-          setUsername(data.username);
+        if (data) {
+          if(data.username) setUsername(data.username);
+          if(data.role) setCurrentUserRole(data.role); // ★追加：ユーザーの権限もStateに保存する
         }
+        setUserId(user.id);
       }
     };
     fetchUserProfile();
@@ -100,6 +107,17 @@ export default function Home() {
     return Math.round(total / reviews.length); 
   };
 
+  const sortedBooks = [...books].sort((a,b) => {
+    if (sortOrder === 'newest') {
+      return new Date(b.created_at) - new Date(a.created_at);
+    } else if (sortOrder === 'reviews') {
+      const countA = a.reviews ? a.reviews.length : 0;
+      const countB = b.reviews ? b.reviews.length : 0;
+      return countB - countA;
+    }
+    return 0;
+  });
+
   // ==========================================
   // ★追加：表示するデータを計算する
   // ==========================================
@@ -107,7 +125,7 @@ export default function Home() {
   
   // 表示する最初の位置と最後の位置を計算して切り取る (slice)
   const startIndex = (currentPage - 1) * ITEMS_PER_PAGE;
-  const currentBooks = books.slice(startIndex, startIndex + ITEMS_PER_PAGE);
+  const currentBooks = sortedBooks.slice(startIndex, startIndex + ITEMS_PER_PAGE);
 
   return (
     <Container maxW="container.md" py={8}>
@@ -116,10 +134,19 @@ export default function Home() {
         <HStack>
             <Heading as="h1" size="lg">同人誌レビュー</Heading>
             <Spacer />
-            {username && (
-              <Text fontWeight="bold" mr={4}>
-                {username}さん
-              </Text>
+              {username && (
+              <Link to={`/profile/${userId}`}>
+                <Text 
+                  fontWeight="bold" 
+                  mr={4} 
+                  color={currentUserRole === 'admin' ? "red.600" : "blue.600"} 
+                  _hover={{ textDecoration: 'underline' }}
+                >
+                  {username}さん
+                  {/* おまけ：管理者の場合はアイコンや文字を添えてもわかりやすいです */}
+                  {currentUserRole === 'admin' && " (管理者)"}
+                </Text>
+              </Link>
             )}
             <Button colorScheme="red" variant="outline" size="sm" onClick={handleLogout}>
                 ログアウト
@@ -154,9 +181,21 @@ export default function Home() {
           </Collapse>
         </Box>
 
-        <HStack>
+<HStack w="full">
           <Input placeholder="タイトルで検索" value={keyword} onChange={(e) => setKeyword(e.target.value)} />
           <Button onClick={() => fetchBooks(keyword)}>検索</Button>
+          
+          <Select 
+            w="200px" 
+            value={sortOrder} 
+            onChange={(e) => {
+              setSortOrder(e.target.value);
+              setCurrentPage(1); // ソート順を変えたら1ページ目に戻す
+            }}
+          >
+            <option value="newest">新着順</option>
+            <option value="reviews">レビュー数</option>
+          </Select>
         </HStack>
 
         <Box textAlign="left">
